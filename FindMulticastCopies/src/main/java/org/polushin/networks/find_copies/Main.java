@@ -10,7 +10,7 @@ public class Main {
 
     private static final String IDENTIFY_MESSAGE = "Hello from me to me!";
     private static final Charset CHARSET = Charset.forName("UTF-8");
-    private static final int PORT = 17118;
+    private static final int PORT = 17120;
 
     private static final long MULTICAST_DELAY = 10 * 1000;
     private static final long ALIVE_TIMEOUT = 20 * 1000;
@@ -41,7 +41,13 @@ public class Main {
                 clientSocket.send(sendPacket);
             }
 
-            knownCopies.entrySet().removeIf(entry -> entry.getValue() < System.currentTimeMillis());
+            knownCopies.entrySet().removeIf(entry -> {
+                if (entry.getValue() < System.currentTimeMillis()) {
+                    System.out.println("Lost: " + entry.getKey());
+                    return true;
+                }
+                return false;
+            });
 
             int timeout = (int) (nextMulticastTime - System.currentTimeMillis());
             if (timeout <= 0)

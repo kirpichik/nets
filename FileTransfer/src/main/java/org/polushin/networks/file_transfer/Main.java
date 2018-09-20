@@ -1,14 +1,13 @@
 package org.polushin.networks.file_transfer;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
 public class Main {
 
     private static final String USAGE = "Usage: -send <hostname:port> <file> or -storage <port> <storage-path>";
-    // 1 Терабайт в байтах
-    private static final long MAX_FILE_SIZE = 1024L * 1024 * 1024 * 1024;
 
     public static void main(String[] args) {
         if (args.length != 3)
@@ -22,8 +21,7 @@ public class Main {
                 filesStorage(args);
                 return;
             default:
-                System.out.println(USAGE);
-                System.exit(-1);
+                exitWithError(USAGE);
         }
     }
 
@@ -42,6 +40,7 @@ public class Main {
             address = InetAddress.getByName(args[1].substring(0, pos));
         } catch (NumberFormatException | UnknownHostException e) {
             exitWithError(USAGE);
+            return;
         }
 
         File file = new File(args[2]);
@@ -49,10 +48,14 @@ public class Main {
             exitWithError(String.format("File \"%s\" not found.", args[2]));
         else if (!file.isFile())
             exitWithError("Only files can be sent.");
-        else if (file.length() > MAX_FILE_SIZE)
+        else if (file.length() >= StorageServer.MAX_FILE_SIZE)
             exitWithError("To large file.");
 
-        // TODO
+        try {
+            new FileSender(address, port).sendFile(file);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -64,6 +67,7 @@ public class Main {
             port = Integer.parseInt(args[1]);
         } catch (NumberFormatException e) {
             exitWithError(USAGE);
+            return;
         }
 
         File storage = new File(args[2]);
@@ -72,7 +76,16 @@ public class Main {
         else if (!storage.isDirectory())
             exitWithError("Storage path must be directory.");
 
-        // TODO
+        StorageServer server;
+        try {
+            server = new StorageServer(port, storage);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
+
+        server.startServer();
+        Runtime.getRuntime().addShutdownHook(new Thread(server::stopServer));
     }
 
     private static void exitWithError(String message) {

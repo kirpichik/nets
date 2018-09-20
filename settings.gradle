@@ -1,3 +1,4 @@
 rootProject.name = 'Networks'
 include 'FindMulticastCopies'
+include 'FileTransfer'
 

@@ -49,12 +49,12 @@ public class StorageServer {
             e.printStackTrace();
         }
         threadpool.shutdown();
+        System.out.println("Stopping server...");
         try {
             threadpool.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        System.out.println("Stopping server...");
     }
 
     private void run() {

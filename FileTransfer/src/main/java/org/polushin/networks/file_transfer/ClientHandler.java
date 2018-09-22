@@ -14,6 +14,8 @@ public class ClientHandler implements Runnable {
     // Размер буфера для записи имени файла в UTF-8 (4096 символов, до 4-х байт каждый)
     private static final int FILENAME_BUFFER_SIZE = 4096 * 4;
     private static final int BUFFER_SIZE = 1024;
+    // Задержка переодического отображения скорости выгрузки файла
+    private static final long DUMP_SPEED_DELAY = 3 * 1000;
 
     private final File storage;
     private final Socket socket;
@@ -84,19 +86,39 @@ public class ClientHandler implements Runnable {
      * @param fileSize Размер файла.
      */
     private void uploadFile(File file, long fileSize) throws IOException {
-        System.out.println(String.format("Uploading \"%s\" from %s...", file.getName(), socket.getInetAddress()));
+        System.out.format("Uploading \"%s\" from %s...\n", file.getName(), socket.getInetAddress());
 
         OutputStream fileOutput = new FileOutputStream(file);
         long fullLen = 0;
+        long beginTime = System.currentTimeMillis();
+        long nextUpdateTime = beginTime;
+        long currentDelayLen = 0;
+
         int len;
         do {
             len = inputStream.read(buffer, 0, buffer.length);
             fullLen += len;
+            currentDelayLen += len;
             fileOutput.write(buffer, 0, len);
+            //fileOutput.flush();
+
+            long time = System.currentTimeMillis();
+            if (nextUpdateTime <= time) {
+                float sub = time - nextUpdateTime;
+                long current = (long) (sub == 0 ? currentDelayLen : currentDelayLen / sub);
+                sub = time - beginTime;
+                long average = (long) (sub == 0 ? fullLen : fullLen / sub) * 1000;
+                System.out.format("Host: %s, Current speed: %s, Average speed: %s\n", socket.getInetAddress(),
+                                  formatSpeed(current), formatSpeed(average));
+                nextUpdateTime = time + DUMP_SPEED_DELAY;
+                currentDelayLen = 0;
+            }
         } while (fullLen < fileSize);
         fileOutput.close();
 
-        System.out.println(String.format("File \"%s\" stored.", file.getName()));
+        long average = fullLen / (System.currentTimeMillis() - beginTime) * 1000;
+        System.out.format("File \"%s\" from %s stored. Average speed: %s\n", file.getName(), socket.getInetAddress(),
+                          formatSpeed(average));
     }
 
     /**
@@ -135,7 +157,6 @@ public class ClientHandler implements Runnable {
      * @return Имя файла.
      */
     private String readFilename(int size) throws IOException {
-        System.out.println("Filename size: " + size);
         readAtLeastBytes(filenameBuffer, 0, size);
         return new String(filenameBuffer, 0, size);
     }
@@ -176,5 +197,23 @@ public class ClientHandler implements Runnable {
         int len = 0;
         while (len < required)
             len += inputStream.read(buffer, offset + len, required - len);
+    }
+
+    /**
+     * Создает форматированную стоку с отображением скорости передачи данных.
+     *
+     * @param speed Скорость в байт/секунду
+     *
+     * @return Форматированная строка.
+     */
+    private static String formatSpeed(long speed) {
+        if (speed < 1024)
+            return speed + " Bytes/sec";
+        else if (speed < 1024 * 1024)
+            return speed / 1024 + " Kb/sec";
+        else if (speed < 1024 * 1024 * 1024)
+            return speed / (1024 * 1024) + " Mb/sec";
+        else
+            return speed / (1024 * 1024 * 1024) + " Gb/sec";
     }
 }

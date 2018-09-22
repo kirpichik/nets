@@ -69,11 +69,11 @@ public class Main {
         File file = new File(path);
 
         if (!file.exists())
-            System.out.format("File \"%s\" not found.", path);
+            System.out.format("File \"%s\" not found.\n", path);
         else if (!file.isFile())
-            System.out.format("\"%s\" is not file.", path);
+            System.out.format("\"%s\" is not file.\n", path);
         else if (file.length() >= Utils.MAX_FILE_SIZE)
-            System.out.format("\"%s\" is to large.", path);
+            System.out.format("\"%s\" is to large.\n", path);
         else
             return file;
 

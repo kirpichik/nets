@@ -4,13 +4,15 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Main {
 
     private static final String USAGE = "Usage: -send <hostname:port> <file> or -storage <port> <storage-path>";
 
     public static void main(String[] args) {
-        if (args.length != 3)
+        if (args.length < 3)
             exitWithError(USAGE);
 
         switch (args[0]) {
@@ -43,21 +45,39 @@ public class Main {
             return;
         }
 
-        File file = new File(args[2]);
-        if (!file.exists())
-            exitWithError(String.format("File \"%s\" not found.", args[2]));
-        else if (!file.isFile())
-            exitWithError("Only files can be sent.");
-        else if (file.length() >= Utils.MAX_FILE_SIZE)
-            exitWithError("To large file.");
+        List<File> files = new ArrayList<>();
+        for (int i = 2; i < args.length; i++) {
+            File file = prepareFile(args[i]);
+            if (file != null)
+                files.add(file);
+        }
 
-        try {
-            FileSender sender = new FileSender(address, port);
-            sender.sendFile(file);
-            sender.close();
+        if (files.isEmpty())
+            exitWithError("No files to send.");
+
+        try (FileSender sender = new FileSender(address, port)) {
+            files.forEach(sender::sendFile);
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Проверяет валидность переданного файла.
+     */
+    private static File prepareFile(String path) {
+        File file = new File(path);
+
+        if (!file.exists())
+            System.out.format("File \"%s\" not found.", path);
+        else if (!file.isFile())
+            System.out.format("\"%s\" is not file.", path);
+        else if (file.length() >= Utils.MAX_FILE_SIZE)
+            System.out.format("\"%s\" is to large.", path);
+        else
+            return file;
+
+        return null;
     }
 
     /**

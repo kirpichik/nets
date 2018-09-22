@@ -12,7 +12,7 @@ import static org.polushin.networks.file_transfer.Utils.*;
 /**
  * Отправитель файлов на сервер-хранилище.
  */
-public class FileSender {
+public class FileSender implements Closeable {
 
     private static final int BUFFER_SIZE = 1024;
     private static final byte[] ZERO_FILE_LEN = new byte[5];
@@ -68,6 +68,7 @@ public class FileSender {
     /**
      * Завершает отправку всех файлов и закрывает соеднинение.
      */
+    @Override
     public void close() {
         if (!running)
             return;

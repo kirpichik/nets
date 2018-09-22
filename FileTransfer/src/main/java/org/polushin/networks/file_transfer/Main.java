@@ -52,7 +52,9 @@ public class Main {
             exitWithError("To large file.");
 
         try {
-            new FileSender(address, port).sendFile(file);
+            FileSender sender = new FileSender(address, port);
+            sender.sendFile(file);
+            sender.close();
         } catch (IOException e) {
             e.printStackTrace();
         }

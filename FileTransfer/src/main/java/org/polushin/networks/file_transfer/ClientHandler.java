@@ -35,6 +35,7 @@ public class ClientHandler implements Runnable {
     @Override
     public void run() {
         try {
+            System.out.println("Connected " + socket.getInetAddress());
             handleConnection(socket);
         } catch (IOException e) {
             e.printStackTrace();
@@ -83,6 +84,8 @@ public class ClientHandler implements Runnable {
      * @param fileSize Размер файла.
      */
     private void uploadFile(File file, long fileSize) throws IOException {
+        System.out.println(String.format("Uploading \"%s\" from %s...", file.getName(), socket.getInetAddress()));
+
         OutputStream fileOutput = new FileOutputStream(file);
         long fullLen = 0;
         int len;
@@ -92,6 +95,8 @@ public class ClientHandler implements Runnable {
             fileOutput.write(buffer, 0, len);
         } while (fullLen < fileSize);
         fileOutput.close();
+
+        System.out.println(String.format("File \"%s\" stored.", file.getName()));
     }
 
     /**
@@ -104,9 +109,19 @@ public class ClientHandler implements Runnable {
         if (!file.exists())
             return file;
 
-        int suffix = 1;
+        int pos = filename.lastIndexOf('.');
+        String prefix, suffix;
+        if (pos == -1) {
+            prefix = filename;
+            suffix = "";
+        } else {
+            prefix = filename.substring(0, pos);
+            suffix = filename.substring(pos);
+        }
+
+        int number = 1;
         do {
-            file = new File(storage, String.format("%s (%d)", filename, suffix++));
+            file = new File(storage, String.format("%s (%d)%s", prefix, number++, suffix));
         } while (file.exists());
 
         return file;
@@ -120,6 +135,7 @@ public class ClientHandler implements Runnable {
      * @return Имя файла.
      */
     private String readFilename(int size) throws IOException {
+        System.out.println("Filename size: " + size);
         readAtLeastBytes(filenameBuffer, 0, size);
         return new String(filenameBuffer, 0, size);
     }
@@ -130,7 +146,7 @@ public class ClientHandler implements Runnable {
     private int readFilenameSize() throws IOException {
         clearSizesBuffer();
         readAtLeastBytes(sizesBuffer.array(), LONG_IN_BYTES_SIZE - FILENAME_LEN_SIZE, FILENAME_LEN_SIZE);
-        return sizesBuffer.getInt(INT_IN_BYTES_SIZE - 1);
+        return sizesBuffer.getInt(INT_IN_BYTES_SIZE);
     }
 
     /**

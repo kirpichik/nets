@@ -14,3 +14,11 @@ repositories {
 dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
 }
+
+task fatJar(type: Jar) {
+    manifest {
+        attributes 'Main-Class': 'org.polushin.networks.file_transfer.Main'
+    }
+    from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+    with jar
+}

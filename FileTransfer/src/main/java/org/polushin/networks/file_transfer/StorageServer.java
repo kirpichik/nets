@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Сервер-хранилище файлов.
@@ -16,7 +17,7 @@ public class StorageServer {
     private final ExecutorService threadpool;
     private final Thread accepterThread;
 
-    private volatile boolean running = true;
+    private volatile boolean running = false;
 
     public StorageServer(int port, File storage) throws IOException {
         this.storage = storage;
@@ -31,6 +32,7 @@ public class StorageServer {
     public void startServer() {
         if (running)
             return;
+        running = true;
         accepterThread.start();
     }
 
@@ -47,14 +49,22 @@ public class StorageServer {
             e.printStackTrace();
         }
         threadpool.shutdown();
+        try {
+            threadpool.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        System.out.println("Stopping server...");
     }
 
     private void run() {
+        System.out.println("Server started.");
         while (running) {
             try {
                 threadpool.submit(new ClientHandler(serverSocket.accept(), storage));
             } catch (IOException e) {
-                e.printStackTrace();
+                if (!serverSocket.isClosed())
+                    e.printStackTrace();
             }
         }
     }

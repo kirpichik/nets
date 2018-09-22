@@ -137,8 +137,8 @@ public class FileSender {
 
         response = inputStream.read();
         if (response == ServerResponses.FILE_SAVED.ordinal())
-            System.out.println(String.format("Cannot upload file: \"%s\"", file.getAbsolutePath()));
-        else
             System.out.println(String.format("File \"%s\" uploaded.", file.getAbsolutePath()));
+        else
+            System.out.println(String.format("Cannot upload file: \"%s\"", file.getAbsolutePath()));
     }
 }

@@ -48,7 +48,7 @@ public class Main {
             exitWithError(String.format("File \"%s\" not found.", args[2]));
         else if (!file.isFile())
             exitWithError("Only files can be sent.");
-        else if (file.length() >= StorageServer.MAX_FILE_SIZE)
+        else if (file.length() >= Utils.MAX_FILE_SIZE)
             exitWithError("To large file.");
 
         try {

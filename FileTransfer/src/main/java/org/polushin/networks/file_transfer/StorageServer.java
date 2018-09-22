@@ -3,39 +3,60 @@ package org.polushin.networks.file_transfer;
 import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
-import java.nio.charset.Charset;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Сервер-хранилище файлов.
  */
 public class StorageServer {
 
-    // 1 Терабайт в байтах
-    public static final long MAX_FILE_SIZE = 1024L * 1024 * 1024 * 1024;
-
-    // Стандартная кодировка для имени файла
-    public static final Charset CHARSET = Charset.forName("UTF-8");
-
     private final File storage;
-    private final ServerSocket socket;
+    private final ServerSocket serverSocket;
+    private final ExecutorService threadpool;
+    private final Thread accepterThread;
+
+    private volatile boolean running = true;
 
     public StorageServer(int port, File storage) throws IOException {
         this.storage = storage;
-        socket = new ServerSocket(port);
+        serverSocket = new ServerSocket(port);
+        threadpool = Executors.newCachedThreadPool();
+        accepterThread = new Thread(this::run);
     }
 
     /**
      * Запускает обработку входящих соединений.
      */
     public void startServer() {
-        // TODO
+        if (running)
+            return;
+        accepterThread.start();
     }
 
     /**
      * Останавливает обработку входящих соединений.
      */
     public void stopServer() {
-        // TODO
+        if (!running)
+            return;
+        running = false;
+        try {
+            serverSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        threadpool.shutdown();
+    }
+
+    private void run() {
+        while (running) {
+            try {
+                threadpool.submit(new ClientHandler(serverSocket.accept(), storage));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
 }

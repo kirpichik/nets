@@ -88,33 +88,34 @@ public class ClientHandler implements Runnable {
     private void uploadFile(File file, long fileSize) throws IOException {
         System.out.format("Uploading \"%s\" from %s...\n", file.getName(), socket.getInetAddress());
 
-        OutputStream fileOutput = new FileOutputStream(file);
         long fullLen = 0;
         long beginTime = System.currentTimeMillis();
         long nextUpdateTime = beginTime;
         long currentDelayLen = 0;
-
         int len;
-        do {
-            len = inputStream.read(buffer, 0, buffer.length);
-            fullLen += len;
-            currentDelayLen += len;
-            fileOutput.write(buffer, 0, len);
-            //fileOutput.flush();
 
-            long time = System.currentTimeMillis();
-            if (nextUpdateTime <= time) {
-                float sub = time - nextUpdateTime;
-                long current = (long) (sub == 0 ? currentDelayLen : currentDelayLen / sub);
-                sub = time - beginTime;
-                long average = (long) (sub == 0 ? fullLen : fullLen / sub) * 1000;
-                System.out.format("Host: %s, Current speed: %s, Average speed: %s\n", socket.getInetAddress(),
-                                  formatSpeed(current), formatSpeed(average));
-                nextUpdateTime = time + DUMP_SPEED_DELAY;
-                currentDelayLen = 0;
-            }
-        } while (fullLen < fileSize);
-        fileOutput.close();
+        try (OutputStream fileOutput = new FileOutputStream(file)) {
+            do {
+                len = inputStream.read(buffer, 0, buffer.length);
+                if (len == -1)
+                    throw new IOException(String.format("Cannot receive file from %s", socket.getInetAddress()));
+                fullLen += len;
+                currentDelayLen += len;
+                fileOutput.write(buffer, 0, len);
+
+                long time = System.currentTimeMillis();
+                if (nextUpdateTime <= time) {
+                    float sub = time - nextUpdateTime;
+                    long current = (long) (sub == 0 ? currentDelayLen : currentDelayLen / sub);
+                    sub = time - beginTime;
+                    long average = (long) (sub == 0 ? fullLen : fullLen / sub) * 1000;
+                    System.out.format("Host: %s, Current speed: %s, Average speed: %s\n", socket.getInetAddress(),
+                            formatSpeed(current), formatSpeed(average));
+                    nextUpdateTime = time + DUMP_SPEED_DELAY;
+                    currentDelayLen = 0;
+                }
+            } while (fullLen < fileSize);
+        }
 
         long average = fullLen / (System.currentTimeMillis() - beginTime) * 1000;
         System.out.format("File \"%s\" from %s stored. Average speed: %s\n", file.getName(), socket.getInetAddress(),
@@ -127,6 +128,8 @@ public class ClientHandler implements Runnable {
      * @return Файл.
      */
     private File prepareFile(String filename) {
+        // Обход опасных имен вида ../../filename
+        filename = new File(filename).getName();
         File file = new File(storage, filename);
         if (!file.exists())
             return file;
@@ -195,8 +198,12 @@ public class ClientHandler implements Runnable {
      */
     private void readAtLeastBytes(byte[] buffer, int offset, int required) throws IOException {
         int len = 0;
-        while (len < required)
-            len += inputStream.read(buffer, offset + len, required - len);
+        while (len < required) {
+            int count = inputStream.read(buffer, offset + len, required - len);
+            if (count == -1)
+                throw new IOException("Cannot read bytes");
+            len += count;
+        }
     }
 
     /**

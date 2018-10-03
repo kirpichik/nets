@@ -161,7 +161,7 @@ public class ClientHandler implements Runnable {
      */
     private String readFilename(int size) throws IOException {
         readAtLeastBytes(filenameBuffer, 0, size);
-        return new String(filenameBuffer, 0, size);
+        return new String(filenameBuffer, 0, size, CHARSET);
     }
 
     /**

@@ -23,7 +23,7 @@ public class Main {
 
         InetAddress group = null;
         try {
-            InetAddress group = InetAddress.getByName(args[0]);
+             group = InetAddress.getByName(args[0]);
         } catch(UnknownHostException e) {
             System.err.format("Address: %s is incorrect.\n", args[1]);
         }

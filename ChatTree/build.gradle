@@ -1,0 +1,20 @@
+plugins {
+    id 'scala'
+}
+
+group 'Networks'
+version '1.0-SNAPSHOT'
+
+repositories {
+    jcenter()
+    mavenCentral()
+}
+
+dependencies {
+    compile 'org.scala-lang:scala-library:2.12.7'
+
+    testCompile 'junit:junit:4.12'
+    testCompile 'org.scalatest:scalatest_2.12:3.0.4'
+
+    testRuntime 'org.scala-lang.modules:scala-xml_2.12:1.0.6'
+}

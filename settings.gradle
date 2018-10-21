@@ -1,4 +1,5 @@
 rootProject.name = 'Networks'
 include 'FindMulticastCopies'
 include 'FileTransfer'
+include 'ChatTree'
 

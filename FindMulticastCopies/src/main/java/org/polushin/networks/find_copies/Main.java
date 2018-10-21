@@ -21,7 +21,12 @@ public class Main {
             System.exit(1);
         }
 
-        final InetAddress group = InetAddress.getByName(args[0]);
+        InetAddress group = null;
+        try {
+             group = InetAddress.getByName(args[0]);
+        } catch(UnknownHostException e) {
+            System.err.format("Address: %s is incorrect.\n", args[1]);
+        }
         final MulticastSocket serverSocket = new MulticastSocket(PORT);
         final DatagramSocket clientSocket = new DatagramSocket();
         final DatagramPacket receivePacket = new DatagramPacket(new byte[IDENTIFY_MESSAGE.length()],

@@ -5,6 +5,9 @@ import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.util.UUID
 
+/**
+ * Пакет отправки текстового сообщения.
+ */
 class TextMessage(guid: UUID, port: Int, msg: String) extends Message(guid, port) {
 
   def this(msg: String) = this()

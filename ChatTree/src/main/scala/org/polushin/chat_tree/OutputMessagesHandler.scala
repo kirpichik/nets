@@ -15,12 +15,10 @@ class OutputMessagesHandler(handler: MessageTarget => Unit) {
   private val sendQueue = new LinkedBlockingQueue[(OutputMessage, Boolean)]
   private val repeatingMessages = new ConcurrentHashMap[OutputMessage, Int]
 
-  def start(): Unit = {
-    repeaterThread.setDaemon(true)
-    senderThread.setDaemon(true)
-    repeaterThread.start()
-    senderThread.start()
-  }
+  repeaterThread.setDaemon(true)
+  senderThread.setDaemon(true)
+  repeaterThread.start()
+  senderThread.start()
 
   /**
    * Добавляет сообщение в очередь на отправку.
@@ -33,8 +31,15 @@ class OutputMessagesHandler(handler: MessageTarget => Unit) {
     sendQueue.add(((message, target), repeat))
   }
 
+  /**
+   * Отменяет повторные попытки отправки сообщений.
+   *
+   * @param msgType Тип сообщения.
+   * @param uuid UUID сообщения.
+   */
   def cancelRepeatByType(msgType: MessageType, uuid: UUID): Unit = {
-    // TODO
+    // TODO - concurrent
+    repeatingMessages.entrySet().removeIf(entry => entry.getKey._1.getClass == msgType && entry.getKey._1.uuid == uuid)
   }
 
   private val senderThread = new Thread(() =>
@@ -49,7 +54,7 @@ class OutputMessagesHandler(handler: MessageTarget => Unit) {
   )
 
   private val repeaterThread = new Thread(() => {
-    // TODO
+    // TODO - concurrent
   })
 }
 

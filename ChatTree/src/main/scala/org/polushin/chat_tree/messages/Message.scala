@@ -13,10 +13,25 @@ abstract class Message(guid: UUID, port: Int) {
   val senderPort: Int = port
   val uuid: UUID = guid
 
+  /**
+   * Отправляет сообщение на заданный адрес и порт используя указанный датаграм-сокет.
+   *
+   * @param socket Датаграм-сокет.
+   * @param target Получатель пакета.
+   */
   def send(socket: DatagramSocket, target: (InetAddress, Int))
 
+  /**
+   * @return Уникальный ID пакета.
+   */
   protected def getId: Short
 
+  /**
+   * Формирует префиксный пакет в виде:
+   * (UUID-пакета)(порт-получателя)(id-пакета)
+   *
+   * @return Сформированный префикс в виде массива байт.
+   */
   protected def formPacketPrefix(): Array[Byte] = {
     ByteBuffer.allocate(Message.PREFIX_BYTES)
       .putLong(uuid.getMostSignificantBits)
@@ -35,6 +50,13 @@ object Message {
   val TYPE_BYTES: Int = 2
   val PREFIX_BYTES: Int = UUID_BYTES + PORT_BYTES + TYPE_BYTES
 
+  /**
+   * Разбирает массив байт в виде объекта сообщения.
+   *
+   * @param bytes Массив байт.
+   *
+   * @return Опционально: объект сообщения.
+   */
   def parseMessage(bytes: Array[Byte]): Option[Message] = {
     if (bytes.length < PREFIX_BYTES)
       return null

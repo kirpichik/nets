@@ -19,6 +19,9 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
 
   private val messagesHistory = createFixedSizeSet[HistoryEntry](ChatTree.UUIDS_HISTORY_SIZE)
 
+  /**
+   * Запускает обработку сообщений.
+   */
   def start(): Unit = {
     parent foreach {
       parent => outputMessagesHandler.sendMessage(new HelloMessage, parent)

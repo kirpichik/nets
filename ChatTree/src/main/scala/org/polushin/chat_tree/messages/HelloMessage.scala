@@ -3,6 +3,9 @@ package org.polushin.chat_tree.messages
 import java.net.{DatagramPacket, DatagramSocket, InetAddress}
 import java.util.UUID
 
+/**
+ * Уведомление о существовании нового узла.
+ */
 class HelloMessage(guid: UUID, port: Int) extends Message(guid, port) {
 
   def this() = this()

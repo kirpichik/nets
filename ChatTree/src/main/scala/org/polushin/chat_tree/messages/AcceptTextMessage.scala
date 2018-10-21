@@ -4,6 +4,9 @@ import java.net.{DatagramPacket, DatagramSocket, InetAddress}
 import java.nio.ByteBuffer
 import java.util.UUID
 
+/**
+ * Подтверждение получения сообщения.
+ */
 class AcceptTextMessage(guid: UUID, port: Int, accepted: UUID) extends Message(guid, port) {
 
   def this(accepted: UUID) = this()

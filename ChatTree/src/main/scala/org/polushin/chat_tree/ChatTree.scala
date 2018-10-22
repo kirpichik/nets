@@ -9,15 +9,13 @@ import scala.util.Random
 
 class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, dropChance: Int) {
 
-  type HistoryEntry = (UUID, MessageType)
-
   private val outputMessagesHandler = new OutputMessagesHandler(noRecipientResponseHandler)
   private val socket = new DatagramSocket(currentPort)
   private val random = new Random
 
   private val neighbors = createConcurrentHashSet[MessageTarget]()
 
-  private val messagesHistory = createFixedSizeSet[HistoryEntry](ChatTree.UUIDS_HISTORY_SIZE)
+  private val messagesHistory = createFixedSizeSet[UUID](ChatTree.UUIDS_HISTORY_SIZE)
 
   /**
    * Запускает обработку сообщений.
@@ -36,9 +34,10 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
   private def handleUserInput(): Unit = {
     val scanner = new Scanner(System.in, TextMessage.DEFAULT_CHARSET.name())
     while (scanner.hasNextLine) {
-      val message = scanner.nextLine()
+      val message = new TextMessage(currentPort, scanner.nextLine())
+      messagesHistory.add(message.uuid)
       neighbors.foreach(target =>
-        outputMessagesHandler.sendMessage(new TextMessage(currentPort, message), target)
+        outputMessagesHandler.sendMessage(message, target)
       )
     }
   }
@@ -63,7 +62,7 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
 
     message match {
       case m: HelloMessage =>
-        if (messagesHistory.add(m.uuid, classOf[HelloMessage])) {
+        if (messagesHistory.add(m.uuid)) {
           neighbors.add((packet.getAddress, m.senderPort))
           println(s"New child: $receiver")
           println("Current neighbors:")
@@ -71,11 +70,10 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
         }
         outputMessagesHandler.sendMessage(new AcceptHelloMessage(currentPort, m.uuid), receiver, repeat = false)
       case m: TextMessage =>
-        if (messagesHistory.add(m.uuid, classOf[TextMessage])) {
+        if (messagesHistory.add(m.uuid)) {
           println(s"========== Input message text: ${m.message} ==========")
           neighbors.foreach(target =>
-            if (target != receiver)
-              outputMessagesHandler.sendMessage(new TextMessage(currentPort, m.message), target)
+            outputMessagesHandler.sendMessage(new TextMessage(m.uuid, currentPort, m.message), target)
           )
         }
         outputMessagesHandler.sendMessage(new AcceptTextMessage(currentPort, m.uuid), receiver, repeat = false)

@@ -24,7 +24,7 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
    */
   def start(): Unit = {
     parent foreach {
-      parent => outputMessagesHandler.sendMessage(new HelloMessage, parent)
+      parent => outputMessagesHandler.sendMessage(new HelloMessage(currentPort), parent)
     }
 
     inputMessagesHandler.setDaemon(true)
@@ -35,8 +35,12 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
 
   private def handleUserInput(): Unit = {
     val scanner = new Scanner(System.in, TextMessage.DEFAULT_CHARSET.name())
-    while (scanner.hasNextLine)
-      neighbors.foreach(children => outputMessagesHandler.sendMessage(new TextMessage(scanner.nextLine()), children))
+    while (scanner.hasNextLine) {
+      val message = scanner.nextLine()
+      neighbors.foreach(target =>
+        outputMessagesHandler.sendMessage(new TextMessage(currentPort, message), target)
+      )
+    }
   }
 
   private val inputMessagesHandler = new Thread(() => {
@@ -44,35 +48,46 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
     while (true) {
       val packet = new DatagramPacket(buffer, buffer.length)
       socket.receive(packet)
-      // TODO - big packet?
-      if (dropChance >= random.nextInt(100))
-        Message.parseMessage(packet.getData) foreach {
+      if (dropChance <= random.nextInt(100))
+        Message.parseMessage(packet.getData, packet.getLength) foreach {
           message => handleMessage(packet, message)
         }
+      else
+        println(s"Message from ${packet.getAddress}:${packet.getPort} dropped.")
     }
   })
 
   private def handleMessage(packet: DatagramPacket, message: Message): Unit = {
     val receiver = (packet.getAddress, message.senderPort)
+    println(s"Input message: $message")
 
     message match {
       case m: HelloMessage =>
-        if (messagesHistory.add(m.uuid, classOf[HelloMessage]))
-          neighbors.add((packet.getAddress, packet.getPort))
-        outputMessagesHandler.sendMessage(new AcceptHelloMessage(m.uuid), receiver, repeat = false)
+        if (messagesHistory.add(m.uuid, classOf[HelloMessage])) {
+          neighbors.add((packet.getAddress, m.senderPort))
+          println(s"New child: $receiver")
+          println("Current neighbors:")
+          neighbors.foreach(println)
+        }
+        outputMessagesHandler.sendMessage(new AcceptHelloMessage(currentPort, m.uuid), receiver, repeat = false)
       case m: TextMessage =>
-        if (messagesHistory.add(m.uuid, classOf[TextMessage]))
-          println("Input message: " + m.message)
-        outputMessagesHandler.sendMessage(new AcceptTextMessage(m.uuid), receiver, repeat = false)
+        if (messagesHistory.add(m.uuid, classOf[TextMessage])) {
+          println(s"========== Input message text: ${m.message} ==========")
+          neighbors.foreach(target =>
+            if (target != receiver)
+              outputMessagesHandler.sendMessage(new TextMessage(currentPort, m.message), target)
+          )
+        }
+        outputMessagesHandler.sendMessage(new AcceptTextMessage(currentPort, m.uuid), receiver, repeat = false)
       case m: AcceptHelloMessage =>
         parent foreach {
           parent =>
             if (parent == receiver) {
               neighbors.add(parent)
-              outputMessagesHandler.cancelRepeatByType(classOf[HelloMessage], m.acceptedUuid)
+              outputMessagesHandler.cancelRepeat(m.acceptedUuid, receiver)
             }
         }
-      case m: AcceptTextMessage => outputMessagesHandler.cancelRepeatByType(classOf[TextMessage], m.acceptedUuid)
+      case m: AcceptTextMessage => outputMessagesHandler.cancelRepeat(m.acceptedUuid, receiver)
     }
   }
 
@@ -82,6 +97,7 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
 }
 
 object ChatTree {
+  // TODO - размер UDP пакета 64кб. Требуется ли бить длинные сообщения?
   private val BUFFER_SIZE = 1024
   private val UUIDS_HISTORY_SIZE = 1024
 }

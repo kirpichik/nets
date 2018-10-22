@@ -10,7 +10,7 @@ import java.util.UUID
  */
 class TextMessage(guid: UUID, port: Int, msg: String) extends Message(guid, port) {
 
-  def this(msg: String) = this()
+  def this(port: Int, msg: String) = this(UUID.randomUUID(), port, msg)
 
   val message: String = msg
 

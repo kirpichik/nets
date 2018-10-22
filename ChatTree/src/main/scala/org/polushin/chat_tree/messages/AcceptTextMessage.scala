@@ -9,7 +9,7 @@ import java.util.UUID
  */
 class AcceptTextMessage(guid: UUID, port: Int, accepted: UUID) extends Message(guid, port) {
 
-  def this(accepted: UUID) = this()
+  def this(port: Int, accepted: UUID) = this(UUID.randomUUID(), port, accepted)
 
   val acceptedUuid: UUID = accepted
 

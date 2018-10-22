@@ -8,7 +8,7 @@ import java.util.UUID
  */
 class HelloMessage(guid: UUID, port: Int) extends Message(guid, port) {
 
-  def this() = this()
+  def this(port: Int) = this(UUID.randomUUID(), port)
 
   override def send(socket: DatagramSocket, target: (InetAddress, Int)): Unit = {
     val array = formPacketPrefix()

@@ -6,10 +6,6 @@ import java.util.UUID
 
 abstract class Message(guid: UUID, port: Int) {
 
-  def this() {
-    this(UUID.randomUUID(), 0)
-  }
-
   val senderPort: Int = port
   val uuid: UUID = guid
 
@@ -20,6 +16,8 @@ abstract class Message(guid: UUID, port: Int) {
    * @param target Получатель пакета.
    */
   def send(socket: DatagramSocket, target: (InetAddress, Int))
+
+  override def toString: String = s"(type: ${getClass.getSimpleName}, uuid: $uuid)"
 
   /**
    * @return Уникальный ID пакета.
@@ -57,7 +55,7 @@ object Message {
    *
    * @return Опционально: объект сообщения.
    */
-  def parseMessage(bytes: Array[Byte]): Option[Message] = {
+  def parseMessage(bytes: Array[Byte], length: Int): Option[Message] = {
     if (bytes.length < PREFIX_BYTES)
       return null
 
@@ -67,7 +65,7 @@ object Message {
 
     buffer.getShort match {
       case 0 =>
-        val text = new String(bytes, PREFIX_BYTES, bytes.length - PREFIX_BYTES, TextMessage.DEFAULT_CHARSET)
+        val text = new String(bytes, PREFIX_BYTES, length - PREFIX_BYTES, TextMessage.DEFAULT_CHARSET)
         Option(new TextMessage(uuid, port, text))
       case 1 =>
         val accept = loadUuid(buffer)

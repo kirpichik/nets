@@ -35,22 +35,23 @@ class OutputMessagesHandler(handler: MessageTarget => Unit) {
    */
   def cancelRepeat(uuid: UUID, target: MessageTarget): Unit = {
     repeatingMessages foreach {
-      case (msg, _) =>
-        if (msg._2 == target && msg._1.uuid == uuid)
-          repeatingMessages.remove(msg)
+      case (outputMessage, _) =>
+        val (message, checkTarget) = outputMessage
+        if (message.uuid == uuid && checkTarget == target)
+          repeatingMessages.remove(outputMessage)
     }
     println(s"Cancelled repeating: uuid = $uuid to $target")
   }
 
   private val senderThread = new Thread(() =>
     while (true) {
-      val output = sendQueue.take()
-      val msg = output._1
-      msg._1.send(socket, msg._2)
-      println(s"Message sent: ${msg._1}")
+      val (outputMessage, repeat) = sendQueue.take()
+      val (message, target) = outputMessage
+      message.send(socket, target)
+      println(s"Message sent: $message")
 
-      if (output._2)
-        repeatingMessages.put(msg, 0)
+      if (repeat)
+        repeatingMessages.put(outputMessage, 0)
     }
   )
 
@@ -59,15 +60,16 @@ class OutputMessagesHandler(handler: MessageTarget => Unit) {
       TimeUnit.SECONDS.sleep(OutputMessagesHandler.REPEAT_TRY_DELAY)
 
       repeatingMessages foreach {
-        case (msg, count) =>
+        case (outputMessage, count) =>
+          val (message, target) = outputMessage
           if (count >= OutputMessagesHandler.MAX_REPEAT_TRY) {
-            println(s"Message resend tries to ${msg._2} expired: ${msg._1}")
-            repeatingMessages.remove(msg)
-            handler(msg._2)
+            println(s"Message resend tries to $target expired: $message")
+            repeatingMessages.remove(outputMessage)
+            handler(target)
           } else {
-            msg._1.send(socket, msg._2)
-            println(s"Message resent (${count + 1}): ${msg._1} to target ${msg._2}")
-            repeatingMessages.update(msg, count + 1)
+            message.send(socket, target)
+            println(s"Message resent (${count + 1}): $message to target $target")
+            repeatingMessages.update(outputMessage, count + 1)
           }
       }
     }

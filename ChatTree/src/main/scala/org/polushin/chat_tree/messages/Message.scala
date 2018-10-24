@@ -1,8 +1,10 @@
 package org.polushin.chat_tree.messages
 
-import java.net.{DatagramSocket, InetAddress}
+import java.net.DatagramSocket
 import java.nio.ByteBuffer
 import java.util.UUID
+
+import org.polushin.chat_tree.MessageTarget
 
 abstract class Message(guid: UUID, port: Int) {
 
@@ -15,7 +17,7 @@ abstract class Message(guid: UUID, port: Int) {
    * @param socket Датаграм-сокет.
    * @param target Получатель пакета.
    */
-  def send(socket: DatagramSocket, target: (InetAddress, Int))
+  def send(socket: DatagramSocket, target: MessageTarget)
 
   override def toString: String = s"(type: ${getClass.getSimpleName}, uuid: $uuid)"
 

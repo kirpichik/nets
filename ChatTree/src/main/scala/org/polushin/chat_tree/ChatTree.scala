@@ -95,7 +95,6 @@ class ChatTree(parent: Option[(InetAddress, Int)] = None, currentPort: Int, drop
 }
 
 object ChatTree {
-  // TODO - размер UDP пакета 64кб. Требуется ли бить длинные сообщения?
   private val BUFFER_SIZE = 1024
   private val UUIDS_HISTORY_SIZE = 1024
 }

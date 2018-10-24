@@ -1,9 +1,11 @@
 package org.polushin.chat_tree.messages
 
-import java.net.{DatagramPacket, DatagramSocket, InetAddress}
+import java.net.{DatagramPacket, DatagramSocket}
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.util.UUID
+
+import org.polushin.chat_tree.MessageTarget
 
 /**
  * Пакет отправки текстового сообщения.
@@ -14,7 +16,7 @@ class TextMessage(guid: UUID, port: Int, msg: String) extends Message(guid, port
 
   val message: String = msg
 
-  override def send(socket: DatagramSocket, target: (InetAddress, Int)): Unit = {
+  override def send(socket: DatagramSocket, target: MessageTarget): Unit = {
     val prefix = formPacketPrefix()
     val messageBytes = msg.getBytes(TextMessage.DEFAULT_CHARSET)
     val array = ByteBuffer.allocate(prefix.length + messageBytes.length).put(prefix).put(messageBytes).array()

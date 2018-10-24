@@ -1,8 +1,10 @@
 package org.polushin.chat_tree.messages
 
-import java.net.{DatagramPacket, DatagramSocket, InetAddress}
+import java.net.{DatagramPacket, DatagramSocket}
 import java.nio.ByteBuffer
 import java.util.UUID
+
+import org.polushin.chat_tree.MessageTarget
 
 /**
  * Подтверждение получения сообщения.
@@ -13,7 +15,7 @@ class AcceptTextMessage(guid: UUID, port: Int, accepted: UUID) extends Message(g
 
   val acceptedUuid: UUID = accepted
 
-  override def send(socket: DatagramSocket, target: (InetAddress, Int)): Unit = {
+  override def send(socket: DatagramSocket, target: MessageTarget): Unit = {
     val prefix = formPacketPrefix()
     val array = ByteBuffer.allocate(prefix.length + Message.UUID_BYTES)
       .put(prefix)

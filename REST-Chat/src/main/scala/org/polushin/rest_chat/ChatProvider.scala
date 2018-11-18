@@ -22,7 +22,7 @@ trait ChatProvider {
   /**
    * @return Набор пользователей в чате.
    */
-  def getUsers: Set[User]
+  def getUsers: Set[String]
 
   /**
    * Ищет пользователя по его нику.
@@ -31,7 +31,7 @@ trait ChatProvider {
    *
    * @return Опциональный пользователь.
    */
-  def getUser(nickname: String): Option[User]
+  def getUser(nickname: String): Option[UserData]
 
   /**
    * Останавливает работу сервера или отключает клиента от сервера.

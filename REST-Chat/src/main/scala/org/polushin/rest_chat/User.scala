@@ -27,4 +27,6 @@ class User(name: String, id: UUID) {
 
 object User {
   val ACTIVITY_TIMEOUT: Long = (5 minutes)._1
+
+  def fromUserAccess(user: UserAccess): User = new User(user.nickname, UUID.fromString(user.token))
 }

@@ -9,15 +9,16 @@ object Connect extends ChatCommand {
 
   override def perform(state: ChatState, args: Array[String]): Unit = {
     if (args.length < 2) {
-      state.sendMessageToOwner("Need args: <address> <port>")
+      state.sendMessageToOwner("Need args: <nick> <address> <port>")
       return
     }
 
     try {
-      val port = args(1).toInt
-      val address = InetAddress.getByName(args(0))
-      state.connectServer(address, port)
-      state.sendMessageToOwner("Connection established.")
+      val nick = args(0)
+      val address = InetAddress.getByName(args(1))
+      val port = args(2).toInt
+      if (state.connectServer(nick, address, port))
+        state.sendMessageToOwner("Connection established.")
     } catch {
       case _: NumberFormatException => state.sendMessageToOwner("Wrong port format.")
       case _: UnknownHostException => state.sendMessageToOwner("Cannot resolve address.")

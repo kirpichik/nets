@@ -14,6 +14,7 @@ object Main {
         handleInputLine(state, line)
       } catch {
         case _: IllegalStateException => state.sendMessageToOwner("No connection, type /help command.")
+        case e: Exception => state.sendMessageToOwner("Error received: " + e.getMessage)
       }
     }
   }
@@ -38,6 +39,7 @@ object Main {
       case "listen" => Listen.perform(state, args)
       case "help" => Help.perform(state, args)
       case "users" => Users.perform(state, args)
+      case "user-info" => UserInfo.perform(state, args)
       case _ => state.sendMessageToOwner("Unknown command.")
     }
   }

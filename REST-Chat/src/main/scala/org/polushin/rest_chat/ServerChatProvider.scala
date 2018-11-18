@@ -9,7 +9,7 @@ import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.ActorMaterializer
-import spray.json.{JsNumber, JsObject, JsString}
+import spray.json.{JsObject, JsString}
 
 import scala.collection.concurrent.TrieMap
 import scala.collection.mutable.ArrayBuffer
@@ -59,12 +59,7 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
       usersNicknames.put(nickname, user)
       users.put(user.uuid, user)
       broadcastMessage(s"${user.username} join chat.")
-      complete {
-        JsObject(
-          "username" -> JsString(nickname),
-          "token" -> JsString(user.uuid.toString)
-        )
-      }
+      complete(UserAccess(nickname, user.uuid.toString))
     }
   }
 
@@ -108,12 +103,7 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
    */
   private def restMessageSend(user: User, message: InputMessage): Route = {
     val id = broadcastMessage(message.text, user)
-    complete {
-      JsObject(
-        "id" -> JsNumber(id),
-        "message" -> JsString(message.text),
-      )
-    }
+    complete(OutputMessage(message.text, id))
   }
 
   /**
@@ -216,9 +206,12 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
 
   override def sendMessageToChat(msg: String): Unit = broadcastMessage(msg, AdminUser)
 
-  override def getUsers: Set[User] = users.values.toSet
+  override def getUsers: Set[String] = usersNicknames.keySet.toSet
 
-  override def getUser(nickname: String): Option[User] = usersNicknames.get(nickname)
+  override def getUser(nickname: String): Option[UserData] = usersNicknames.get(nickname) match {
+    case Some(user) => Option(user.toUserData)
+    case _ => None
+  }
 
   override def shutdown(): Unit = bindingFuture
     .flatMap(_.unbind())

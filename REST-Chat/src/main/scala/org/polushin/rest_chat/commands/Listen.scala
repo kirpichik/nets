@@ -14,8 +14,8 @@ object Listen extends ChatCommand {
 
     try {
       val port = args(0).toInt
-      state.bindServer(port)
-      state.sendMessageToOwner(s"Server started at $port.")
+      if (state.bindServer(port))
+        state.sendMessageToOwner(s"Server started at $port.")
     } catch {
       case _: NumberFormatException => state.sendMessageToOwner("Wrong port format.")
       case _: IOException => state.sendMessageToOwner("Cannot connect to server.")

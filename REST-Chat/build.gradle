@@ -12,7 +12,9 @@ repositories {
 
 dependencies {
     compile 'org.scala-lang:scala-library:2.12.7'
-    compile 'ws.unfiltered:unfiltered_2.12:0.10.0-M2'
+    compile 'com.typesafe.akka:akka-http_2.12:10.1.5'
+    compile 'com.typesafe.akka:akka-stream_2.12:2.5.12'
+    compile 'com.typesafe.akka:akka-http-spray-json_2.12:10.1.5'
 
     testCompile 'junit:junit:4.12'
     testCompile 'org.scalatest:scalatest_2.12:3.0.4'

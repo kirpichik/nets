@@ -1,19 +1,14 @@
 package org.polushin.rest_chat
 
 import java.net.InetAddress
-import java.util.UUID
 
 class ClientChatProvider(address: InetAddress, port: Int) extends ChatProvider {
 
-  override def broadcastMessage(msg: String): Unit = ???
+  override def sendMessageToChat(msg: String): Unit = ???
 
-  override def getUsers: List[User] = ???
+  override def getUsers: Set[User] = ???
 
-  override def getUser(nick: String): Option[User] = ???
-
-  override def getUser(uuid: UUID): Option[User] = ???
-
-  override def kick(user: User): Boolean = ???
+  override def getUser(nickname: String): Option[User] = ???
 
   override def shutdown(): Unit = ???
 }

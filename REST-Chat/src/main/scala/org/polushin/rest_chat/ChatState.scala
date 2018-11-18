@@ -2,7 +2,6 @@ package org.polushin.rest_chat
 
 import java.io.IOException
 import java.net.InetAddress
-import java.util.UUID
 
 class ChatState {
 
@@ -24,20 +23,22 @@ class ChatState {
 
   def shutdown(): Unit = provider match {
     case Some(p) => p.shutdown()
+    case _ =>
   }
 
-  def sendMessageToOwner(msg: String, sender: User = SystemUser): Unit = {
-    println(s"[$sender]: $msg")
+  def sendMessageToOwner(msg: String): Unit = provider match {
+    case Some(p) => p.sendMessageToOwner(msg)
+    case _ => println(s"[$SystemUser]: $msg")
   }
 
   @throws[IllegalStateException]("If connection is not established")
-  def broadcastMessage(msg: String): Unit = provider match {
-    case Some(p) => p.broadcastMessage(msg)
+  def sendMessageToChat(msg: String): Unit = provider match {
+    case Some(p) => p.sendMessageToChat(msg)
     case None => throw new IllegalStateException("No connection")
   }
 
   @throws[IllegalStateException]("If connection is not established")
-  def getUsers: List[User] = provider match {
+  def getUsers: Set[User] = provider match {
     case Some(p) => p.getUsers
     case None => throw new IllegalStateException("No connection")
   }
@@ -45,18 +46,6 @@ class ChatState {
   @throws[IllegalStateException]("If connection is not established")
   def getUser(nick: String): Option[User] = provider match {
     case Some(p) => p.getUser(nick)
-    case None => throw new IllegalStateException("No connection")
-  }
-
-  @throws[IllegalStateException]("If connection is not established")
-  def getUser(uuid: UUID): Option[User] = provider match {
-    case Some(p) => p.getUser(uuid)
-    case None => throw new IllegalStateException("No connection")
-  }
-
-  @throws[IllegalStateException]("If connection is not established")
-  def kick(user: User): Boolean = provider match {
-    case Some(p) => p.kick(user)
     case None => throw new IllegalStateException("No connection")
   }
 }

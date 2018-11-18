@@ -13,7 +13,7 @@ object Listen extends ChatCommand {
     }
 
     try {
-      val port = args(1).toInt
+      val port = args(0).toInt
       state.bindServer(port)
       state.sendMessageToOwner(s"Server started at $port.")
     } catch {

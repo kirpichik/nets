@@ -1,19 +1,40 @@
 package org.polushin.rest_chat
 
-import java.util.UUID
-
 trait ChatProvider {
 
-  def broadcastMessage(msg: String): Unit
+  /**
+   * Отправляет сообщение локальному пользователю.
+   *
+   * @param msg Сообщение.
+   * @param sender Отправитель сообщения.
+   */
+  def sendMessageToOwner(msg: String, sender: User = SystemUser): Unit = {
+    println(s"[$sender]: $msg")
+  }
 
-  def getUsers: List[User]
+  /**
+   * Отправляет сообщение всем пользователям в чате.
+   *
+   * @param msg Сообщение.
+   */
+  def sendMessageToChat(msg: String): Unit
 
-  def getUser(nick: String): Option[User]
+  /**
+   * @return Набор пользователей в чате.
+   */
+  def getUsers: Set[User]
 
-  def getUser(uuid: UUID): Option[User]
+  /**
+   * Ищет пользователя по его нику.
+   *
+   * @param nickname Ник пользователя.
+   *
+   * @return Опциональный пользователь.
+   */
+  def getUser(nickname: String): Option[User]
 
-  def kick(user: User): Boolean
-
+  /**
+   * Останавливает работу сервера или отключает клиента от сервера.
+   */
   def shutdown(): Unit
-
 }

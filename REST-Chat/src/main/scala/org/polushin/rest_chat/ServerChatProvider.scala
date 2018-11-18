@@ -1,6 +1,7 @@
 package org.polushin.rest_chat
 
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
@@ -50,7 +51,7 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
    * @param nickname Предпочитаемый ник пользователя.
    */
   private def restLogin(nickname: String): Route = {
-    if (usersNicknames.contains(nickname)) {
+    if (nickname == AdminUser.username || usersNicknames.contains(nickname)) {
       respondWithHeader(RawHeader("WWW-Authenticate", "Token realm='Username is already in use'")) {
         complete(StatusCodes.Unauthorized, "Username is already in use")
       }
@@ -103,7 +104,7 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
    */
   private def restMessageSend(user: User, message: InputMessage): Route = {
     val id = broadcastMessage(message.text, user)
-    complete(OutputMessage(message.text, id))
+    complete(OutputMessage(message.text, id, user.username))
   }
 
   /**
@@ -131,7 +132,7 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
         complete(messagesHistory
           .reverse
           .drop(offsetValue)
-          .map(msg => OutputMessage(msg.text, msg.id))
+          .map(msg => OutputMessage(msg.text, msg.id, msg.user.username))
           .take(countValue).toList)
       }
   }
@@ -147,7 +148,10 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
   private def checkRequestToken(auth: Option[String], executor: User => Route): Route = {
     auth match {
       case Some(value) => getUserByHeaderValue(value) match {
-        case Some(user) => executor(user)
+        case Some(user) =>
+          if (user.updateActivity())
+            broadcastMessage(s"${user.username} back online.")
+          executor(user)
         case _ => complete(StatusCodes.Forbidden, "Unknown user token")
       }
       case _ => complete(StatusCodes.Unauthorized, "No user token provided")
@@ -182,7 +186,7 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
   private def broadcastMessage(msg: String, user: User = SystemUser): Int = {
     sendMessageToOwner(msg, user)
     messagesHistory.synchronized {
-      messagesHistory += Message(AdminUser, msg, System.currentTimeMillis(), messagesHistory.length)
+      messagesHistory += Message(user, msg, System.currentTimeMillis(), messagesHistory.length)
       messagesHistory.length - 1
     }
   }
@@ -204,6 +208,23 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
     case e: Throwable => shutdown(); throw e
   }
 
+  @volatile
+  private var running = true
+
+  /**
+   * Поток для обновления статусов пользователей по таймауту.
+   */
+  new Thread(() => {
+    while (running) {
+      TimeUnit.SECONDS.sleep(ServerChatProvider.USERS_TIMINGS_UPDATE_DELAY)
+
+      users.values foreach { user =>
+        if (user.markAsLeave())
+          broadcastMessage(s"${user.username} reached activity timeout.")
+      }
+    }
+  }).start()
+
   override def sendMessageToChat(msg: String): Unit = broadcastMessage(msg, AdminUser)
 
   override def getUsers: Set[String] = usersNicknames.keySet.toSet
@@ -213,7 +234,14 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
     case _ => None
   }
 
-  override def shutdown(): Unit = bindingFuture
-    .flatMap(_.unbind())
-    .onComplete(_ => system.terminate())
+  override def shutdown(): Unit = {
+    running = false
+    bindingFuture
+      .flatMap(_.unbind())
+      .onComplete(_ => system.terminate())
+  }
+}
+
+object ServerChatProvider {
+  val USERS_TIMINGS_UPDATE_DELAY: Int = 1
 }

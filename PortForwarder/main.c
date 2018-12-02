@@ -46,8 +46,13 @@ static void remove_socket_at(size_t pos) {
 }
 
 static void remove_forward(forward_t* forward) {
+  size_t pos = forward->pos;
+  size_t other = forward->output->pos;
   remove_socket_at(forward->pos);
-  remove_socket_at(forward->output->pos);
+  if (other == state.polls_count)
+    remove_socket_at(pos);
+  else
+    remove_socket_at(other);
 }
 
 static bool handle_socket(size_t pos) {

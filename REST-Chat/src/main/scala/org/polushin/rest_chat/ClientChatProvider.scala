@@ -1,18 +1,20 @@
 package org.polushin.rest_chat
 
 import java.net.InetAddress
-import java.util.concurrent.TimeUnit
 
+import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.marshalling.Marshal
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.ws.{BinaryMessage, TextMessage, WebSocketRequest, Message => WsMessage}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContextExecutor}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
 
 class ClientChatProvider(nick: String, address: InetAddress, port: Int) extends ChatProvider with JsonSupport {
@@ -23,12 +25,6 @@ class ClientChatProvider(nick: String, address: InetAddress, port: Int) extends 
   private implicit val materializer: ActorMaterializer = ActorMaterializer()
   private implicit val executionContext: ExecutionContextExecutor = system.dispatcher
 
-  @volatile
-  private var lastMessageId: Int = -1
-
-  @volatile
-  private var running: Boolean = true
-
   private val initialRequest = Http().singleRequest(HttpRequest(HttpMethods.POST, uri + s"login?nickname=$nick"))
 
   private val user: User = Unmarshal(Await.result(initialRequest, Duration.Inf)).to[UserAccess].value match {
@@ -38,37 +34,52 @@ class ClientChatProvider(nick: String, address: InetAddress, port: Int) extends 
 
   private val tokenHeaders = List(RawHeader("Authorization", s"Token ${user.uuid}"))
 
-  /**
-   * Поток для подгрузки новых сообщений.
-   */
-  new Thread(() => {
-    while (running) {
-      TimeUnit.SECONDS.sleep(ClientChatProvider.MESSAGE_REQUEST_DELAY)
+  {
+    val request = Http().singleRequest(HttpRequest(HttpMethods.GET, uri + "messages/get", tokenHeaders))
+    try {
+      val response = Await.result(request, Duration.Inf)
 
-      val request = Http().singleRequest(HttpRequest(HttpMethods.GET, uri + "messages/get", tokenHeaders))
-      try {
-        val response = Await.result(request, Duration.Inf)
-
-        if (response.status != StatusCodes.OK) {
-          running = false
-          sendMessageToOwner("Cannot receive new messages from server.")
-        }
-        else {
-          val messages = Await.result(Unmarshal(response).to[List[OutputMessage]], Duration.Inf)
-          messages.reverse foreach { message =>
-            if (message.id > lastMessageId)
-              sendMessageToOwner(message.text, new User(message.sender))
-          }
-          if (messages.nonEmpty)
-            lastMessageId = messages.head.id
-        }
-      } catch {
-        case e: Exception =>
-          sendMessageToOwner("Cannot receive new message from server because of: " + e.getMessage)
-          running = false
+      if (response.status != StatusCodes.OK)
+        sendMessageToOwner("Cannot receive old messages from server.")
+      else {
+        val messages = Await.result(Unmarshal(response).to[List[OutputMessage]], Duration.Inf)
+        messages.reverse foreach { message => sendMessageToOwner(message.text, new User(message.sender)) }
       }
+    } catch {
+      case e: Exception =>
+        sendMessageToOwner("Cannot receive old messages from server because of: " + e.getMessage)
     }
-  }).start()
+  }
+
+  private val printSink: Sink[WsMessage, Future[Done]] =
+    Sink.foreach {
+      case message: TextMessage.Strict =>
+        println(message.text)
+      case tm: TextMessage.Streamed =>
+        tm.textStream.runWith(Sink.ignore)
+        Nil
+      case bm: BinaryMessage =>
+        bm.dataStream.runWith(Sink.ignore)
+        Nil
+    }
+
+  private val flow: Flow[WsMessage, WsMessage, Future[Done]] =
+    Flow.fromSinkAndSourceMat(printSink, Source.empty)(Keep.left)
+
+  private val (upgradeResponse, closed) =
+    Http().singleWebSocketRequest(WebSocketRequest(s"ws://${address.getHostAddress}:$port/messages/listen",
+      extraHeaders = tokenHeaders), flow)
+
+  private val connected = upgradeResponse.map { upgrade =>
+    if (upgrade.response.status == StatusCodes.SwitchingProtocols) {
+      Done
+    } else {
+      throw new RuntimeException(s"Connection failed: ${upgrade.response.status}")
+    }
+  }
+
+  connected.onComplete(println)
+  closed.foreach(_ => println("closed"))
 
   override def sendMessageToChat(msg: String): Unit = {
     val request = Marshal(InputMessage(msg)).to[RequestEntity] flatMap { entity =>
@@ -99,11 +110,6 @@ class ClientChatProvider(nick: String, address: InetAddress, port: Int) extends 
   }
 
   override def shutdown(): Unit = {
-    running = false
     Http().singleRequest(HttpRequest(HttpMethods.POST, uri + "logout", tokenHeaders))
   }
-}
-
-object ClientChatProvider {
-  val MESSAGE_REQUEST_DELAY: Int = 1
 }

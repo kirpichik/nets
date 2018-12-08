@@ -7,9 +7,11 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.RawHeader
+import akka.http.scaladsl.model.ws.{BinaryMessage, TextMessage, UpgradeToWebSocket}
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.ActorMaterializer
+import akka.stream.scaladsl.{Sink, Source}
 import spray.json.{JsObject, JsString}
 
 import scala.collection.concurrent.TrieMap
@@ -41,6 +43,8 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
         checkRequestToken(auth, restMessageSend(_: User, message))
       } ~ (path("get") & get & parameters("offset".as[Int].?, "count".as[Int].?)) { (offset, count) =>
         checkRequestToken(auth, restMessagesGet(_: User, offset, count))
+      } ~ (path("listen") & extractUpgradeToWebSocket) { upgrade =>
+        checkRequestToken(auth, restMessagesWebSocket(_: User, upgrade))
       }
     }
   }
@@ -94,6 +98,33 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
   private def restUserByNick(requester: User, nickname: String): Route = usersNicknames.get(nickname) match {
     case Some(user) => complete(user.toUserData)
     case _ => complete(StatusCodes.NotFound, "Unknown user")
+  }
+
+  /**
+   * Исполняет REST-метод messages/listen, который позволяет создать WebSocket для
+   * мгновенного получения и отправки сообщений.
+   *
+   * @param upgrade Состояние WebSocket-а.
+   */
+  private def restMessagesWebSocket(user: User, upgrade: UpgradeToWebSocket): Route = {
+    complete(upgrade.handleMessagesWithSinkSource(Sink foreach {
+      case tm: TextMessage.Strict =>
+        if (user.updateActivity())
+          broadcastMessage(s"${user.username} back online.")
+        broadcastMessage(tm.text, user)
+      case tm: TextMessage.Streamed =>
+        tm.textStream.runWith(Sink.ignore)
+        Nil
+      case bm: BinaryMessage =>
+        bm.dataStream.runWith(Sink.ignore)
+        Nil
+    }, Source.fromIterator(() => Iterator.continually(
+      messagesHistory.synchronized {
+        messagesHistory.wait()
+        val msg = messagesHistory.last
+        TextMessage.Strict(outputMessageFormat.write(OutputMessage(msg.text, msg.id, msg.user.username)).compactPrint)
+      }
+    ))))
   }
 
   /**
@@ -187,6 +218,7 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
     sendMessageToOwner(msg, user)
     messagesHistory.synchronized {
       messagesHistory += Message(user, msg, System.currentTimeMillis(), messagesHistory.length)
+      messagesHistory.notifyAll()
       messagesHistory.length - 1
     }
   }

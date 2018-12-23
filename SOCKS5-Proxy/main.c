@@ -50,13 +50,27 @@
 #define AUTH_BEGIN                     0
 #define AUTH_VERSION_ACCEPTED          1
 #define AUTH_METHODS_COUNT_ACCEPTED    2
-#define AUTH_DONE                      3
-#define REQUEST_VERSION_ACCEPTED       4
-#define REQUEST_COMMAND_ACCEPTED       5
-#define REQUEST_RESERVED_BYTE_ACCEPTED 6
-#define REQUEST_ADDRESS_TYPE_ACCEPTED  7
+#define AUTH_VALID_METHOD_ACCEPTED     3
+#define AUTH_DONE                      4
+#define REQUEST_VERSION_ACCEPTED       5
+#define REQUEST_COMMAND_ACCEPTED       6
+#define REQUEST_RESERVED_BYTE_ACCEPTED 7
+#define REQUEST_ADDRESS_TYPE_ACCEPTED  8
 /* Номера состояния увеличиваются по мере чтения данных до MAX_HOSTNAME_LEN + REQUEST_ADDRESS_TYPE_ACCEPTED */
 #define REQUEST_ADDRESS_ACCEPTED       (-1)
+
+/* Типы ответов */
+#define RESPONSE_UNFINISHED               0
+#define RESPONSE_AUTH_WRONG_VERSION       1
+#define RESPONSE_AUTH_UNACCEPTABLE        2
+#define RESPONSE_AUTH_DONE                3
+#define RESPONSE_COMMANG_WRONG_VERSION    4
+#define RESPONSE_WRONG_COMMAND            5
+#define RESPONSE_UNIMPLEMENTED_COMMAND    6
+#define RESPONSE_WRONG_PROTOCOL_FORMAT    7
+#define RESPONSE_UNSUPPORTED_ADDRESS_TYPE 8
+#define RESPONSE_HOSTNAME_TO_LONG         9
+#define RESPONSE_ACCEPTED                 10
 
 typedef struct socks_state {
   int state;
@@ -205,98 +219,111 @@ static bool register_forward(int client_socket, int target_socket) {
   return true;
 }
 
-static bool handle_socket_input(size_t state_pos) {
+static int handle_socket_input(size_t state_pos) {
   int socket = state.polls[state_pos].fd;
-  socks_state_t* st = &state.forwards[state_pos].state;
-  char buff[BUFFER_SIZE];
+  forward_t* forward = &state.forwards[state_pos];
+  socks_state_t* st = &forward->state;
+  char* buff = forward->buffer;
   char value;
   size_t pos = 0;
-  ssize_t size = recv(socket, buff, BUFFER_SIZE, 0);
 
+  ssize_t size = recv(socket, buff, BUFFER_SIZE, 0);
   if (size < 0) {
     perror("Cannot recv client data");
     return false;
   } else if (size == 0)
     return false;
+  forward->size = size;
 
   while (pos < size) {
     switch (st->state) {
       case AUTH_BEGIN:
         if (buff[pos++] != SOCKS5)
-          return false; // TODO - SEND WRONG PROTOCOL
+          return RESPONSE_AUTH_WRONG_VERSION;
         st->state = AUTH_VERSION_ACCEPTED;
         break;
 
       case AUTH_VERSION_ACCEPTED:
         if ((st->len = buff[pos++]) == 0)
-          return false; // TODO - SEND WRONG FORMAT
+          return RESPONSE_AUTH_UNACCEPTABLE;
         st->state = AUTH_METHODS_COUNT_ACCEPTED;
         break;
 
       case AUTH_METHODS_COUNT_ACCEPTED:
-        if (--st->len == 0) {
-          if (!st->found_auth)
-            return false; // TODO - SEND UNACCEPTABLE
-          st->state = AUTH_DONE; // TODO - SEND AUTH DONE
-        }
-        st->found_auth = st->found_auth || buff[pos++] == AUTH_NOT_REQUIRED;
+        if (buff[pos++] == AUTH_NOT_REQUIRED) {
+          st->len--;
+          st->state = AUTH_VALID_METHOD_ACCEPTED;
+        } else if (--st->len == 0)
+          return RESPONSE_AUTH_UNACCEPTABLE;
+        break;
+
+      case AUTH_VALID_METHOD_ACCEPTED:
+        if (--st->len == 0)
+          st->state = AUTH_DONE;
         break;
 
       case AUTH_DONE:
         if (buff[pos++] != SOCKS5)
-          return false; // TODO - SEND WRONG PROTOCOL
+          return RESPONSE_COMMANG_WRONG_VERSION;
         st->state = REQUEST_VERSION_ACCEPTED;
         break;
 
       case REQUEST_VERSION_ACCEPTED:
         if (buff[pos++] != TCP_ESTABLISH_CONNECTION)
-          return false; // TODO - SEND UNIMPLEMENTED METHOD
+          return RESPONSE_UNIMPLEMENTED_COMMAND;
         st->state = REQUEST_COMMAND_ACCEPTED;
         break;
 
       case REQUEST_COMMAND_ACCEPTED:
         if (buff[pos++] != RESERVED_BYTE)
-          return false; // TODO - SEND WRONG FORMAT
+          return RESPONSE_WRONG_PROTOCOL_FORMAT;
         st->state = REQUEST_RESERVED_BYTE_ACCEPTED;
         break;
 
       case REQUEST_RESERVED_BYTE_ACCEPTED:
         value = buff[pos++];
-        if (value != IPV4_ADDRESS && value != IPV6_ADDRESS && value != HOSTNAME_ADDRESS)
-          return false; // TODO - SEND WRONG FORMAT
+        if (value != IPV4_ADDRESS &&
+            value != IPV6_ADDRESS &&
+            value != HOSTNAME_ADDRESS)
+          return RESPONSE_UNSUPPORTED_ADDRESS_TYPE;
         st->addr_type = value;
         st->state = REQUEST_ADDRESS_TYPE_ACCEPTED;
         break;
 
       case REQUEST_ADDRESS_TYPE_ACCEPTED:
         st->address[st->len++] = value = buff[pos++];
-        if ((st->addr_type == IPV4_ADDRESS && st->len == 4)
-            || (st->addr_type == IPV6_ADDRESS && st->len == 16)
-            || (st->addr_type == HOSTNAME_ADDRESS && value == '\0'))
+        if ((st->addr_type == IPV4_ADDRESS && st->len == 4) ||
+            (st->addr_type == IPV6_ADDRESS && st->len == 16) ||
+            (st->addr_type == HOSTNAME_ADDRESS && value == '\0'))
           st->state = REQUEST_ADDRESS_ACCEPTED;
+        else if (st->len == MAX_HOSTNAME_LEN)
+          return RESPONSE_UNSUPPORTED_ADDRESS_TYPE;
         break;
 
       case REQUEST_ADDRESS_ACCEPTED:
         if (st->port) {
           st->port = (st->port << 8) + buff[pos++];
-          // TODO - ESTABLISH CONNECTION
+          forward->size -= pos;
+          memmove(forward->buffer, forward->buffer + pos, forward->size);
+          return RESPONSE_ACCEPTED;
         } else
           st->port = buff[pos++];
         break;
     }
   }
 
-  return true;
+  return RESPONSE_UNFINISHED;
 }
 
 static bool handle_socket(size_t pos) {
-  //int events = state.polls[pos].revents;
+  int events = state.polls[pos].revents;
   forward_t* forward = &state.forwards[pos];
 
   if (forward->output)
     return handle_data_forward(pos);
   
-  
+  if (events & (POLLIN | POLLPRI))
+    return handle_socket_input(pos);
   
   return true;
 }

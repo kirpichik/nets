@@ -120,7 +120,9 @@ class ServerChatProvider(port: Int) extends ChatProvider with JsonSupport {
         Nil
     }, Source.fromIterator(() => Iterator.continually(
       messagesHistory.synchronized {
-        messagesHistory.wait()
+        val prevSize = messagesHistory.size()
+        while (messagesHistory.size() == prevSize)
+          messagesHistory.wait()
         val msg = messagesHistory.last
         TextMessage.Strict(outputMessageFormat.write(OutputMessage(msg.text, msg.id, msg.user.username)).compactPrint)
       }

@@ -7,6 +7,7 @@
 #include <sys/select.h>
 #include <map>
 #include <memory>
+#include <unistd.h>
 
 static constexpr size_t BUFFER_SIZE = 4096;
 
@@ -26,7 +27,9 @@ class proxy_handler {
 
   bool is_write_required() const { return req_write; }
 
-  virtual ~proxy_handler() {}
+  virtual ~proxy_handler() {
+    close(fd);
+  }
 
  protected:
   const std::shared_ptr<proxy_state> state;

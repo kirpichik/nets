@@ -8,6 +8,8 @@
 #include <map>
 #include <memory>
 
+static constexpr size_t BUFFER_SIZE = 4096;
+
 namespace proxy {
 
 class proxy_state;

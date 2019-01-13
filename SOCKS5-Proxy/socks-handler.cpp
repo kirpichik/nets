@@ -2,6 +2,9 @@
 #include <sys/socket.h>
 #include <iostream>
 #include <string.h>
+#include <unistd.h>
+
+#include "forward-handler.h"
 
 #include "socks-handler.h"
 
@@ -64,19 +67,19 @@ socks_handler::socks_handler(std::shared_ptr<proxy::proxy_state> state,
                              int fd) noexcept
     : proxy::proxy_handler(state, fd), st(state::AUTH_VERSION) {}
 
-static void push_error(std::queue<uint8_t>& output, uint8_t code) noexcept {
-  output.push(code);
-  output.push(RESERVED_BYTE);
-  output.push(static_cast<uint8_t>(address_type::HOSTNAME));
-  output.push('\0');
-  output.push(0);
-  output.push(0);
+static void push_error(std::deque<uint8_t>& output, uint8_t code) noexcept {
+  output.push_back(code);
+  output.push_back(RESERVED_BYTE);
+  output.push_back(static_cast<uint8_t>(address_type::HOSTNAME));
+  output.push_back('\0');
+  output.push_back(0);
+  output.push_back(0);
 }
 
 void resolve_handler(void* arg, int status, int timeouts, hostent* hostent) noexcept {
   socks_handler* handler = reinterpret_cast<socks_handler*>(arg);
   handler->req_write = true;
-  handler->output.push(SOCKS5_VERSION);
+  handler->output.push_back(SOCKS5_VERSION);
 
   if (status != ARES_SUCCESS) {
     push_error(handler->output, static_cast<uint8_t>(response::HOST_UNREACHABLE));
@@ -100,24 +103,26 @@ void resolve_handler(void* arg, int status, int timeouts, hostent* hostent) noex
 
   if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr))) {
     std::perror("Cannot connect forward socket");
+    close(sock);
     push_error(handler->output, static_cast<uint8_t>(response::HOST_UNREACHABLE));
     handler->st = state::DROP_CONNECTION;
   }
 
-  handler->output.push(static_cast<uint8_t>(response::GRANTED));
-  handler->output.push(RESERVED_BYTE);
+  handler->pair_socket = sock;
+  handler->output.push_back(static_cast<uint8_t>(response::GRANTED));
+  handler->output.push_back(RESERVED_BYTE);
   // TODO - send self-ip
-  handler->output.push(static_cast<uint8_t>(address_type::HOSTNAME));
-  handler->output.push('\0');
-  handler->output.push(0);
-  handler->output.push(0);
+  handler->output.push_back(static_cast<uint8_t>(address_type::HOSTNAME));
+  handler->output.push_back('\0');
+  handler->output.push_back(0);
+  handler->output.push_back(0);
   handler->st = state::TRANSFORM_TO_FORWARD;
 }
 
 enum response socks_handler::parse_input() noexcept {
   while (!input.empty()) {
     uint8_t value = input.front();
-    input.pop();
+    input.pop_front();
 
     switch (st) {
       case state::AUTH_VERSION:
@@ -207,7 +212,7 @@ enum response socks_handler::parse_input() noexcept {
 void socks_handler::handle_parse_result(enum response result) noexcept {
   if (result != response::UNFINISHED) {
     req_write = true;
-    output.push(SOCKS5_VERSION);
+    output.push_back(SOCKS5_VERSION);
   }
 
   switch (result) {
@@ -215,7 +220,7 @@ void socks_handler::handle_parse_result(enum response result) noexcept {
       break;
 
     case response::AUTH_ACCEPT:
-      output.push(AUTH_NOT_REQUIRED);
+      output.push_back(AUTH_NOT_REQUIRED);
       break;
 
     case response::GRANTED:
@@ -223,30 +228,30 @@ void socks_handler::handle_parse_result(enum response result) noexcept {
         state->resolve(std::string(address.begin(), address.end()), &resolve_handler, this);
         st = state::WAIT_FOR_RESOLVE;
       } else {
-        output.push(static_cast<uint8_t>(response::GRANTED));
-        output.push(RESERVED_BYTE);
+        output.push_back(static_cast<uint8_t>(response::GRANTED));
+        output.push_back(RESERVED_BYTE);
         // TODO - send self-ip
-        output.push(static_cast<uint8_t>(address_type::HOSTNAME));
-        output.push('\0');
-        output.push(0);
-        output.push(0);
+        output.push_back(static_cast<uint8_t>(address_type::HOSTNAME));
+        output.push_back('\0');
+        output.push_back(0);
+        output.push_back(0);
         st = state::TRANSFORM_TO_FORWARD;
       }
       break;
     
     case response::AUTH_PROTOCOL_ERROR:
     case response::UNSUPPORTED_AUTH_METHOD:
-      output.push(UNSUPPORTED_AUTH_METHOD);
+      output.push_back(UNSUPPORTED_AUTH_METHOD);
       st = state::DROP_CONNECTION;
       break;
 
     default:
-      output.push(static_cast<uint8_t>(result));
-      output.push(RESERVED_BYTE);
-      output.push(static_cast<uint8_t>(address_type::HOSTNAME));
-      output.push('\0');
-      output.push(0);
-      output.push(0);
+      output.push_back(static_cast<uint8_t>(result));
+      output.push_back(RESERVED_BYTE);
+      output.push_back(static_cast<uint8_t>(address_type::HOSTNAME));
+      output.push_back('\0');
+      output.push_back(0);
+      output.push_back(0);
       st = state::DROP_CONNECTION;
       break;
   }
@@ -265,7 +270,7 @@ bool socks_handler::handle_receive() noexcept {
   }
 
   for (const auto& i : buffer)
-    input.push(i);
+    input.push_back(i);
 
   handle_parse_result(parse_input());
   switch (st) {
@@ -280,7 +285,36 @@ bool socks_handler::handle_receive() noexcept {
 }
 
 bool socks_handler::handle_send() noexcept {
-  return false;
+  std::vector<uint8_t> buffer(std::min(output.size(), BUFFER_SIZE));
+  while (!output.empty() && buffer.size() < BUFFER_SIZE) {
+    buffer.push_back(output.front());
+    output.pop_front();
+  }
+
+  ssize_t count;
+  if ((count = send(fd, &buffer[0], buffer.size(), 0)) < 0) {
+    std::perror("Cannot send data from socks handler");
+    return false;
+  }
+
+  // Возвращаем остатки
+  for (size_t left = buffer.size() - count; left > 0; left--)
+    output.push_front(buffer[buffer.size() - left]);
+
+  // Все отправлено, переходим к проксированию
+  if (output.empty()) {
+    std::vector<uint8_t> buff(input.begin(), input.end());
+    fwd::forward_handler* src = new fwd::forward_handler(state, fd, buff);
+    fwd::forward_handler* dst = new fwd::forward_handler(state, pair_socket);
+    dst->set_pair(src);
+    src->set_pair(dst);
+    state->register_handler(pair_socket, std::unique_ptr<fwd::forward_handler>(dst));
+    // Самозаменяемся
+    state->register_handler(fd, std::unique_ptr<fwd::forward_handler>(src));
+    return true;
+  }
+
+  return true;
 }
 
 }  // namespace socks

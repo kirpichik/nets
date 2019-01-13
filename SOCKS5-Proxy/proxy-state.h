@@ -2,6 +2,7 @@
 #ifndef PROXY_HANDLER_H
 #define PROXY_HANDLER_H
 
+#include <netdb.h>
 #include <ares.h>
 #include <sys/select.h>
 #include <map>
@@ -42,7 +43,7 @@ class proxy_state final {
                         std::unique_ptr<proxy_handler> handler) noexcept;
   void unregister_handler(int socket) noexcept;
 
-  using resolve_callback = void (*)(void*, int, int, struct hostent*);
+  using resolve_callback = void (*)(void*, int, int, hostent*);
   void resolve(const std::string& hostname,
                resolve_callback callback,
                void* arg) noexcept;

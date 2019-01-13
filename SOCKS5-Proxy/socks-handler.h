@@ -2,8 +2,9 @@
 #ifndef SOCKS_HANDLER_H
 #define SOCKS_HANDLER_H
 
-#include <vector>
+#include <queue>
 #include <array>
+#include <vector>
 
 #include "proxy-state.h"
 
@@ -14,6 +15,8 @@ static constexpr size_t BUFFER_SIZE = 4096;
 enum class state : std::uint8_t;
 enum class address_type : std::uint8_t;
 enum class response : std::uint8_t;
+
+void resolve_handler(void* arg, int status, int timeouts, struct hostent* hostent) noexcept;
 
 class socks_handler final : public proxy::proxy_handler {
  public:
@@ -32,10 +35,13 @@ class socks_handler final : public proxy::proxy_handler {
   std::vector<uint8_t> address;
   uint16_t port;
 
-  std::array<uint8_t, BUFFER_SIZE> output;
+  std::queue<uint8_t> input;
+  std::queue<uint8_t> output;
 
-  enum response parse_input(const uint8_t* buff, size_t len) noexcept;
+  enum response parse_input() noexcept;
   void handle_parse_result(enum response result) noexcept;
+
+  friend void resolve_handler(void* arg, int status, int timeouts, struct hostent* hostent) noexcept;
 };
 
 }  // namespace socks
